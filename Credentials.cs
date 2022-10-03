@@ -94,6 +94,7 @@ namespace OlatAccessibilityApp
             {
                 Size = Marshal.SizeOf<UIInfo>(),
                 Parent = parentWindowHandle,
+                MessageText = Program.BaseUri.Host,
                 CaptionText = Program.Caption,
             };
             uint authPackage = 0;
