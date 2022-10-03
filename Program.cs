@@ -30,8 +30,9 @@ namespace OlatAccessibilityApp
     {
         private static string GetSetting([CallerMemberName] string name = "") => ConfigurationManager.AppSettings.Get(name);
 
-        public static Uri BaseUri => new(GetSetting());
-        public static string Caption => GetSetting();
+        public static Uri BaseUri => new(GetSetting() ?? throw new ConfigurationErrorsException());
+        public static string Caption => GetSetting() ?? "OpenOlat - infinite learning";
+        public static string UserDataPath => GetSetting() ?? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), typeof(Program).Assembly.GetName().Name);
 
         [STAThread]
         public static void Main()

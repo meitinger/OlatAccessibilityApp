@@ -51,7 +51,14 @@ namespace OlatAccessibilityApp
 
         private SpeechSynthesizer Synthesizer { get; } = new();
 
-        public WebView2 WebView { get; } = new() { Dock = DockStyle.Fill };
+        public WebView2 WebView { get; } = new()
+        {
+            CreationProperties = new()
+            {
+                UserDataFolder = Program.UserDataPath,
+            },
+            Dock = DockStyle.Fill,
+        };
 
         private void PostWebMessage(string name, params JProperty[] properties) => WebView.CoreWebView2.PostWebMessageAsJson(new JObject(properties.Prepend(new JProperty("name", name))).ToString());
 
