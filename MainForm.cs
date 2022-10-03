@@ -57,17 +57,26 @@ namespace OlatAccessibilityApp
 
         private void Synthesizer_SpeakCompleted(object sender, SpeakCompletedEventArgs e)
         {
-            if (_prompts.TryGetValue(e.Prompt, out var id) && _prompts.Remove(e.Prompt)) PostWebMessage("ttsSpeakComplete", new JProperty("id", id));
+            if (_prompts.TryGetValue(e.Prompt, out var id) && _prompts.Remove(e.Prompt))
+            {
+                PostWebMessage("ttsSpeakComplete", new JProperty("id", id));
+            }
         }
 
         private void Synthesizer_SpeakProgress(object sender, SpeakProgressEventArgs e)
         {
-            if (_prompts.TryGetValue(e.Prompt, out var id)) PostWebMessage("ttsSpeakProgress", new JProperty("id", id), new JProperty("position", e.CharacterPosition), new JProperty("count", e.CharacterCount));
+            if (_prompts.TryGetValue(e.Prompt, out var id))
+            {
+                PostWebMessage("ttsSpeakProgress", new JProperty("id", id), new JProperty("position", e.CharacterPosition), new JProperty("count", e.CharacterCount));
+            }
         }
 
         private void WebView_CoreWebView2InitializationCompleted(object sender, CoreWebView2InitializationCompletedEventArgs e)
         {
-            if (e.IsSuccess) WebView.CoreWebView2.AddScriptToExecuteOnDocumentCreatedAsync(Program.Resource("App.js", stream => new StreamReader(stream, Encoding.UTF8).ReadToEnd()));
+            if (e.IsSuccess)
+            {
+                WebView.CoreWebView2.AddScriptToExecuteOnDocumentCreatedAsync(Program.Resource("App.js", stream => new StreamReader(stream, Encoding.UTF8).ReadToEnd()));
+            }
         }
 
         private void WebView_WebMessageReceived(object sender, CoreWebView2WebMessageReceivedEventArgs e)

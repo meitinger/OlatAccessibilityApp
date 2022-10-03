@@ -32,12 +32,11 @@ namespace OlatAccessibilityApp
 
         public static Uri BaseUri => new(GetSetting());
         public static string Caption => GetSetting();
-        public static string CredentialsPath => Environment.ExpandEnvironmentVariables(GetSetting());
-        public static string DecryptionKey => GetSetting();
 
         [STAThread]
         public static void Main()
         {
+            Credential? credential = null;
             Application.EnableVisualStyles();
             Application.SetCompatibleTextRenderingDefault(false);
             MainForm mainForm = new();
@@ -49,16 +48,19 @@ namespace OlatAccessibilityApp
             mainForm.WebView.EnsureCoreWebView2Async();
             Application.Run(context);
 
-            void OnCoreWebView2InitializationCompleted(object sender, CoreWebView2InitializationCompletedEventArgs e)
+            void Login(bool alwaysQueryForCredential = false)
             {
-                if (e.IsSuccess)
+                if (!credential.HasValue || alwaysQueryForCredential)
+                {
+                    credential = Credential.Query(splashForm.Handle, credential);
+                }
+                if (credential.HasValue)
                 {
                     // do _not_ use using for content or ReadAsStreamAsync
-                    var credentials = Credentials.Load();
                     var content = new FormUrlEncodedContent(new Dictionary<string, string>()
                     {
-                        { "o_fiooolat_login_name", credentials.UserName },
-                        { "o_fiooolat_login_pass", credentials.Password },
+                        { "o_fiooolat_login_name", credential.Value.UserName },
+                        { "o_fiooolat_login_pass", credential.Value.Password },
                     });
                     var request = mainForm.WebView.CoreWebView2.Environment.CreateWebResourceRequest
                     (
@@ -68,6 +70,19 @@ namespace OlatAccessibilityApp
                         content.Headers.ToString()
                     );
                     mainForm.WebView.CoreWebView2.NavigateWithWebResourceRequest(request);
+                }
+                else
+                {
+                    splashForm.Close();
+                }
+            }
+
+            void OnCoreWebView2InitializationCompleted(object sender, CoreWebView2InitializationCompletedEventArgs e)
+            {
+                if (e.IsSuccess)
+                {
+                    credential = Credential.Read();
+                    Login();
                 }
                 else
                 {
@@ -97,8 +112,14 @@ namespace OlatAccessibilityApp
                 }
                 else
                 {
-                    if (context.MainForm == splashForm) ReportError(new UnauthorizedAccessException().Message);
-                    context.MainForm.Close();
+                    if (context.MainForm == splashForm)
+                    {
+                        Login(alwaysQueryForCredential: true);
+                    }
+                    else
+                    {
+                        context.MainForm.Close();
+                    }
                 }
             }
 

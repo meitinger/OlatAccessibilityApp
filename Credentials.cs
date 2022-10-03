@@ -15,36 +15,184 @@
  */
 
 using System;
-using System.Security.Cryptography;
-using System.Security.Cryptography.Xml;
-using System.Xml;
-using System.Xml.Serialization;
+using System.ComponentModel;
+using System.Runtime.InteropServices;
+using System.Text;
 
 namespace OlatAccessibilityApp
 {
-    public class Credentials
+    [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
+    internal struct Credential
     {
-        private static readonly XmlSerializer Serializer = new(typeof(Credentials));
+        #region Win32
 
-        public static Credentials Load()
+        private const int CRED_MAX_ATTRIBUTES = 64;
+        private const uint CRED_PACK_GENERIC_CREDENTIALS = 4;
+        private const uint CRED_PERSIST_ENTERPRISE = 3;
+        private const uint CRED_PERSIST_SESSION = 1;
+        private const uint CRED_TYPE_GENERIC = 1;
+        private const uint CREDUIWIN_CHECKBOX = 2;
+        private const uint CREDUIWIN_GENERIC = 1;
+        private const int ERROR_CANCELLED = 1223;
+        private const int ERROR_INSUFFICIENT_BUFFER = 122;
+        private const int ERROR_NOT_FOUND = 1168;
+        private const int ERROR_SUCCESS = 0;
+
+        [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
+        private struct UIInfo
         {
-            XmlDocument doc = new();
-            doc.Load(Program.CredentialsPath);
-            if (!string.IsNullOrEmpty(Program.DecryptionKey))
-            {
-                using var aes = Aes.Create();
-                aes.Key = Convert.FromBase64String(Program.DecryptionKey);
-                EncryptedXml eXml = new(doc);
-                eXml.AddKeyNameMapping(string.Empty, aes);
-                eXml.DecryptDocument();
-            }
-            return (Credentials)Serializer.Deserialize(new XmlNodeReader(doc));
+            public int Size;
+            public IntPtr Parent;
+            public string MessageText;
+            public string CaptionText;
+            public IntPtr Banner;
         }
 
-        [XmlAttribute]
-        public string UserName { get; set; } = string.Empty;
+        [DllImport("advapi32.dll", CharSet = CharSet.Unicode, ExactSpelling = true, SetLastError = false)]
+        private static extern void CredFree(IntPtr buffer);
 
-        [XmlAttribute]
-        public string Password { get; set; } = string.Empty;
+        [DllImport("credui.dll", CharSet = CharSet.Unicode, ExactSpelling = true, SetLastError = true)]
+        private static extern bool CredPackAuthenticationBufferW(uint flags, string userName, string password, byte[]? packedCredentials, ref int packedCredentialsSize);
+
+        [DllImport("advapi32.dll", CharSet = CharSet.Unicode, ExactSpelling = true, SetLastError = true)]
+        private static extern bool CredReadW(string targetName, uint type, uint flags, out IntPtr credential);
+
+        [DllImport("credui.dll", CharSet = CharSet.Unicode, ExactSpelling = true, SetLastError = false)]
+        private static extern int CredUIPromptForWindowsCredentialsW(ref UIInfo uiInfo, int authError, ref uint authPackage, byte[]? inAuthBuffer, int inAuthBufferSize, out IntPtr outAuthBuffer, out int outAuthBufferSize, ref bool save, uint flags);
+
+        [DllImport("credui.dll", CharSet = CharSet.Unicode, ExactSpelling = true, SetLastError = true)]
+        private static extern bool CredUnPackAuthenticationBufferW(uint flags, IntPtr authBuffer, int authBufferSize, StringBuilder userName, ref int maxUserName, StringBuilder domainName, ref int maxDomainName, StringBuilder password, ref int maxPassword);
+
+        [DllImport("advapi32.dll", CharSet = CharSet.Unicode, ExactSpelling = true, SetLastError = true)]
+        private static extern bool CredWriteW(ref Credential credential, uint flags);
+
+        #endregion
+
+        public static Credential? Query(IntPtr parentWindowHandle, Credential? existingCedential)
+        {
+            // incorporate existing credentials
+            bool saveCred = false;
+            byte[]? oldCredBuffer = null;
+            int oldCredBufferSize = 0;
+            if (existingCedential.HasValue)
+            {
+                if (existingCedential.Value.Persist is CRED_PERSIST_ENTERPRISE)
+                {
+                    saveCred = true;
+                }
+                while (!CredPackAuthenticationBufferW(CRED_PACK_GENERIC_CREDENTIALS, existingCedential.Value.UserName, existingCedential.Value.Password, oldCredBuffer, ref oldCredBufferSize))
+                {
+                    if (Marshal.GetLastWin32Error() is not ERROR_INSUFFICIENT_BUFFER || oldCredBufferSize <= oldCredBuffer?.Length)
+                    {
+                        throw new Win32Exception();
+                    }
+                    oldCredBuffer = new byte[oldCredBufferSize];
+                }
+            }
+
+            // show the dialog
+            UIInfo uiInfo = new()
+            {
+                Size = Marshal.SizeOf<UIInfo>(),
+                Parent = parentWindowHandle,
+                CaptionText = Program.Caption,
+            };
+            uint authPackage = 0;
+            var result = CredUIPromptForWindowsCredentialsW(ref uiInfo, 0, ref authPackage, oldCredBuffer, oldCredBufferSize, out var newCredBuffer, out var newCredBufferSize, ref saveCred, CREDUIWIN_GENERIC | CREDUIWIN_CHECKBOX);
+            switch (result)
+            {
+                case ERROR_SUCCESS: break;
+                case ERROR_CANCELLED: return null;
+                default: throw new Win32Exception(result);
+            }
+
+            // extract the user name and password
+            StringBuilder userName = new();
+            StringBuilder domain = new();
+            StringBuilder password = new();
+            try
+            {
+                var userNameSize = userName.Capacity;
+                var domainSize = domain.Capacity;
+                var passwordSize = password.Capacity;
+                while (!CredUnPackAuthenticationBufferW(0, newCredBuffer, newCredBufferSize, userName, ref userNameSize, domain, ref domainSize, password, ref passwordSize))
+                {
+                    if (Marshal.GetLastWin32Error() is not ERROR_INSUFFICIENT_BUFFER || (userNameSize <= userName.Capacity && domainSize <= domain.Capacity && passwordSize <= password.Capacity))
+                    {
+                        throw new Win32Exception();
+                    }
+                    userName.Capacity = userNameSize;
+                    domain.Capacity = domainSize;
+                    password.Capacity = passwordSize;
+                }
+            }
+            finally
+            {
+                Marshal.FreeCoTaskMem(newCredBuffer);
+            }
+            if (domain.Length > 0)
+            {
+                userName.Insert(0, domain).Insert(domain.Length, '\\');
+            }
+
+            // build, save and return the credentials
+            Credential credentials = new()
+            {
+                Flags = 0,
+                Type = CRED_TYPE_GENERIC,
+                TargetName = Program.BaseUri.Host,
+                Password = password.ToString(),
+                Persist = CRED_PERSIST_SESSION,
+                UserName = userName.ToString(),
+            };
+            if (saveCred)
+            {
+                credentials.Persist = CRED_PERSIST_ENTERPRISE;
+                if (!CredWriteW(ref credentials, 0))
+                {
+                    throw new Win32Exception();
+                }
+            }
+            return credentials;
+        }
+
+        public static Credential? Read()
+        {
+            if (!CredReadW(Program.BaseUri.Host, CRED_TYPE_GENERIC, 0, out var credPtr))
+            {
+                return Marshal.GetLastWin32Error() is ERROR_NOT_FOUND ? null : throw new Win32Exception();
+            }
+            try
+            {
+                return Marshal.PtrToStructure<Credential>(credPtr);
+            }
+            finally
+            {
+                CredFree(credPtr);
+            }
+        }
+
+        public uint Flags;
+        public uint Type;
+        public string TargetName;
+        public string? Comment;
+        public long LastWritten;
+        private int CredentialBlobSize;
+        private string CredentialBlob;
+        public uint Persist;
+        public int AttributeCount;
+        public IntPtr Attributes;
+        public string? TargetAlias;
+        public string UserName;
+
+        public string Password
+        {
+            get => CredentialBlob;
+            set
+            {
+                CredentialBlob = value;
+                CredentialBlobSize = CredentialBlob.Length * 2;
+            }
+        }
     }
 }
