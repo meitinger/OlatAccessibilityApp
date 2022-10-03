@@ -29,7 +29,6 @@ namespace OlatAccessibilityApp
         private const int CRED_MAX_ATTRIBUTES = 64;
         private const uint CRED_PACK_GENERIC_CREDENTIALS = 4;
         private const uint CRED_PERSIST_ENTERPRISE = 3;
-        private const uint CRED_PERSIST_SESSION = 1;
         private const uint CRED_TYPE_GENERIC = 1;
         private const uint CREDUIWIN_CHECKBOX = 2;
         private const uint CREDUIWIN_GENERIC = 1;
@@ -138,11 +137,9 @@ namespace OlatAccessibilityApp
             // build, save and return the credentials
             Credential credentials = new()
             {
-                Flags = 0,
                 Type = CRED_TYPE_GENERIC,
                 TargetName = Program.BaseUri.Host,
                 Password = password.ToString(),
-                Persist = CRED_PERSIST_SESSION,
                 UserName = userName.ToString(),
             };
             if (saveCred)
