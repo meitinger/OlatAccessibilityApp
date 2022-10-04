@@ -25,7 +25,7 @@ namespace OlatAccessibilityApp
         {
             SuspendLayout();
             BackColor = Color.White;
-            BackgroundImage = Program.Resource("App.png", Image.FromStream);
+            BackgroundImage = Program.GetResource("App.png", Image.FromStream);
             BackgroundImageLayout = ImageLayout.Center;
             ClientSize = BackgroundImage.Size;
             FormBorderStyle = FormBorderStyle.None;

@@ -28,11 +28,23 @@ namespace OlatAccessibilityApp
 {
     internal static class Program
     {
-        private static string GetSetting([CallerMemberName] string name = "") => ConfigurationManager.AppSettings.Get(name);
+        public static T GetResource<T>(string name, Func<Stream, T> reader)
+        {
+            using var stream = typeof(Program).Assembly.GetManifestResourceStream(typeof(Program), name);
+            return reader(stream);
+        }
+
+        private static string? GetSetting([CallerMemberName] string name = "") => ConfigurationManager.AppSettings.Get(name);
 
         public static Uri BaseUri => new(GetSetting() ?? throw new ConfigurationErrorsException());
+
         public static string Caption => GetSetting() ?? "OpenOlat - infinite learning";
-        public static string UserDataPath => GetSetting() ?? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), typeof(Program).Assembly.GetName().Name);
+
+        public static string UserDataPath => GetSetting() switch
+        {
+            null => Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), typeof(Program).Assembly.GetName().Name),
+            string path => Environment.ExpandEnvironmentVariables(path),
+        };
 
         [STAThread]
         public static void Main()
@@ -134,12 +146,6 @@ namespace OlatAccessibilityApp
             }
 
             void ReportError(string message) => MessageBox.Show(context.MainForm, message, Caption, MessageBoxButtons.OK, MessageBoxIcon.Error);
-        }
-
-        public static T Resource<T>(string name, Func<Stream, T> reader)
-        {
-            using var stream = typeof(Program).Assembly.GetManifestResourceStream(typeof(Program), name);
-            return reader(stream);
         }
     }
 }

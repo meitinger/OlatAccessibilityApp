@@ -42,7 +42,7 @@ namespace OlatAccessibilityApp
             Synthesizer.SpeakCompleted += Synthesizer_SpeakCompleted;
             Synthesizer.SpeakProgress += Synthesizer_SpeakProgress;
             Disposed += (s, e) => Synthesizer.Dispose();
-            Icon = Program.Resource("App.ico", stream => new Icon(stream));
+            Icon = Program.GetResource("App.ico", stream => new Icon(stream));
             StartPosition = FormStartPosition.WindowsDefaultBounds;
             Text = Program.Caption;
             WindowState = FormWindowState.Maximized;
@@ -82,7 +82,7 @@ namespace OlatAccessibilityApp
         {
             if (e.IsSuccess)
             {
-                WebView.CoreWebView2.AddScriptToExecuteOnDocumentCreatedAsync(Program.Resource("App.js", stream => new StreamReader(stream, Encoding.UTF8).ReadToEnd()));
+                WebView.CoreWebView2.AddScriptToExecuteOnDocumentCreatedAsync(Program.GetResource("App.js", stream => new StreamReader(stream, Encoding.UTF8).ReadToEnd()));
             }
         }
 

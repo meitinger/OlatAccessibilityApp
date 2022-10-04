@@ -8,7 +8,7 @@
     <Platforms>x64</Platforms>
     <ApplicationIcon>App.ico</ApplicationIcon>
     <AssemblyTitle>OpenOLAT Accessibility Application</AssemblyTitle>
-    <AssemblyVersion>1.0.2</AssemblyVersion>
+    <AssemblyVersion>1.0.3</AssemblyVersion>
     <Description>OpenOLAT host application providing additional accessibility features.</Description>
     <Copyright>Copyright © 2022 by Manuel Meitinger</Copyright>
   </PropertyGroup>

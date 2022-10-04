@@ -69,7 +69,7 @@ namespace OlatAccessibilityApp
 
         public static Credential? Query(IntPtr parentWindowHandle, Credential? existingCedential)
         {
-            // incorporate existing credentials
+            // incorporate any existing credential
             bool saveCred = false;
             byte[]? oldCredBuffer = null;
             int oldCredBufferSize = 0;
@@ -135,8 +135,8 @@ namespace OlatAccessibilityApp
                 userName.Insert(0, domain).Insert(domain.Length, '\\');
             }
 
-            // build, save and return the credentials
-            Credential credentials = new()
+            // build, save and return the credential
+            Credential credential = new()
             {
                 Type = CRED_TYPE_GENERIC,
                 TargetName = Program.BaseUri.Host,
@@ -145,13 +145,13 @@ namespace OlatAccessibilityApp
             };
             if (saveCred)
             {
-                credentials.Persist = CRED_PERSIST_ENTERPRISE;
-                if (!CredWriteW(ref credentials, 0))
+                credential.Persist = CRED_PERSIST_ENTERPRISE;
+                if (!CredWriteW(ref credential, 0))
                 {
                     throw new Win32Exception();
                 }
             }
-            return credentials;
+            return credential;
         }
 
         public static Credential? Read()
