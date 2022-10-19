@@ -46,6 +46,8 @@ namespace OlatAccessibilityApp
             string path => Environment.ExpandEnvironmentVariables(path),
         };
 
+        public static string? WebView2Path => GetSetting();
+
         [STAThread]
         public static void Main()
         {

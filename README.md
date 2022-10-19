@@ -24,4 +24,5 @@ The following `appSettings` in `OlatAccessibilityApp.config` are supported:
 | ---------------| -------- | -------------------------------------------- |
 | `BaseUri`      | yes      | The URL of the OpenOLAT instance to display. |
 | `Caption`      | no       | The caption of the main window and dialogs.  |
-| `UserDataPath` | no       | The path where WebView stores its data.      |
+| `UserDataPath` | no       | The path where WebView2 stores its data.     |
+| `WebView2Path` | no       | The path to the fixed version binaries.      |

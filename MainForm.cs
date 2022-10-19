@@ -55,6 +55,7 @@ namespace OlatAccessibilityApp
         {
             CreationProperties = new()
             {
+                BrowserExecutableFolder = Program.WebView2Path,
                 UserDataFolder = Program.UserDataPath,
             },
             Dock = DockStyle.Fill,
