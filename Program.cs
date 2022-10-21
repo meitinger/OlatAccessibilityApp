@@ -42,11 +42,15 @@ namespace OlatAccessibilityApp
 
         public static string UserDataPath => GetSetting() switch
         {
-            null => Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), typeof(Program).Assembly.GetName().Name),
+            null or "" => Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), typeof(Program).Assembly.GetName().Name),
             string path => Environment.ExpandEnvironmentVariables(path),
         };
 
-        public static string? WebView2Path => GetSetting();
+        public static string? WebView2Path => GetSetting() switch
+        {
+            null or "" => null,
+            string path => Path.Combine(Path.GetDirectoryName(Application.ExecutablePath), Environment.ExpandEnvironmentVariables(path)),
+        };
 
         [STAThread]
         public static void Main()
