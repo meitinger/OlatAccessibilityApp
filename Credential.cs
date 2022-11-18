@@ -21,8 +21,7 @@ using System.Text;
 
 namespace OlatAccessibilityApp
 {
-    [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
-    internal struct Credential
+    internal class Credential
     {
         #region Win32
 
@@ -38,7 +37,24 @@ namespace OlatAccessibilityApp
         private const int ERROR_SUCCESS = 0;
 
         [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
-        private struct UIInfo
+        private struct CREDENTIALW
+        {
+            public uint Flags;
+            public uint Type;
+            public string TargetName;
+            public string? Comment;
+            public long LastWritten;
+            public int CredentialBlobSize;
+            public IntPtr CredentialBlob;
+            public uint Persist;
+            public int AttributeCount;
+            public IntPtr Attributes;
+            public string? TargetAlias;
+            public string UserName;
+        }
+
+        [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
+        private struct CREDUI_INFOW
         {
             public int Size;
             public IntPtr Parent;
@@ -57,13 +73,13 @@ namespace OlatAccessibilityApp
         private static extern bool CredReadW(string targetName, uint type, uint flags, out IntPtr credential);
 
         [DllImport("credui.dll", CharSet = CharSet.Unicode, ExactSpelling = true, SetLastError = false)]
-        private static extern int CredUIPromptForWindowsCredentialsW(ref UIInfo uiInfo, int authError, ref uint authPackage, byte[]? inAuthBuffer, int inAuthBufferSize, out IntPtr outAuthBuffer, out int outAuthBufferSize, ref bool save, uint flags);
+        private static extern int CredUIPromptForWindowsCredentialsW(ref CREDUI_INFOW uiInfo, int authError, ref uint authPackage, byte[]? inAuthBuffer, int inAuthBufferSize, out IntPtr outAuthBuffer, out int outAuthBufferSize, ref bool save, uint flags);
 
         [DllImport("credui.dll", CharSet = CharSet.Unicode, ExactSpelling = true, SetLastError = true)]
         private static extern bool CredUnPackAuthenticationBufferW(uint flags, IntPtr authBuffer, int authBufferSize, StringBuilder userName, ref int maxUserName, StringBuilder domainName, ref int maxDomainName, StringBuilder password, ref int maxPassword);
 
         [DllImport("advapi32.dll", CharSet = CharSet.Unicode, ExactSpelling = true, SetLastError = true)]
-        private static extern bool CredWriteW(ref Credential credential, uint flags);
+        private static extern bool CredWriteW(ref CREDENTIALW credential, uint flags);
 
         #endregion
 
@@ -73,13 +89,13 @@ namespace OlatAccessibilityApp
             bool saveCred = false;
             byte[]? oldCredBuffer = null;
             int oldCredBufferSize = 0;
-            if (existingCedential.HasValue)
+            if (existingCedential is not null)
             {
-                if (existingCedential.Value.Persist is CRED_PERSIST_ENTERPRISE)
+                if (existingCedential.LastWritten.HasValue)
                 {
                     saveCred = true;
                 }
-                while (!CredPackAuthenticationBufferW(CRED_PACK_GENERIC_CREDENTIALS, existingCedential.Value.UserName, existingCedential.Value.Password, oldCredBuffer, ref oldCredBufferSize))
+                while (!CredPackAuthenticationBufferW(CRED_PACK_GENERIC_CREDENTIALS, existingCedential.UserName, existingCedential.Password, oldCredBuffer, ref oldCredBufferSize))
                 {
                     if (Marshal.GetLastWin32Error() is not ERROR_INSUFFICIENT_BUFFER || oldCredBufferSize <= oldCredBuffer?.Length)
                     {
@@ -90,9 +106,9 @@ namespace OlatAccessibilityApp
             }
 
             // show the dialog
-            UIInfo uiInfo = new()
+            CREDUI_INFOW uiInfo = new()
             {
-                Size = Marshal.SizeOf<UIInfo>(),
+                Size = Marshal.SizeOf<CREDUI_INFOW>(),
                 Parent = parentWindowHandle,
                 MessageText = Program.BaseUri.Host,
                 CaptionText = Program.Caption,
@@ -135,23 +151,32 @@ namespace OlatAccessibilityApp
                 userName.Insert(0, domain).Insert(domain.Length, '\\');
             }
 
-            // build, save and return the credential
-            Credential credential = new()
-            {
-                Type = CRED_TYPE_GENERIC,
-                TargetName = Program.BaseUri.Host,
-                Password = password.ToString(),
-                UserName = userName.ToString(),
-            };
+            // save and return the credential
             if (saveCred)
             {
-                credential.Persist = CRED_PERSIST_ENTERPRISE;
-                if (!CredWriteW(ref credential, 0))
+                var blob = Marshal.StringToHGlobalUni(password.ToString());
+                try
                 {
-                    throw new Win32Exception();
+                    CREDENTIALW credential = new()
+                    {
+                        Type = CRED_TYPE_GENERIC,
+                        TargetName = Program.BaseUri.Host,
+                        CredentialBlobSize = password.Length * 2,
+                        CredentialBlob = blob,
+                        Persist = CRED_PERSIST_ENTERPRISE,
+                        UserName = userName.ToString(),
+                    };
+                    if (!CredWriteW(ref credential, 0))
+                    {
+                        throw new Win32Exception();
+                    }
+                }
+                finally
+                {
+                    Marshal.FreeHGlobal(blob);
                 }
             }
-            return credential;
+            return new(userName.ToString(), password.ToString(), saveCred ? DateTime.Now : null);
         }
 
         public static Credential? Read()
@@ -162,7 +187,12 @@ namespace OlatAccessibilityApp
             }
             try
             {
-                return Marshal.PtrToStructure<Credential>(credPtr);
+                var credential = Marshal.PtrToStructure<CREDENTIALW>(credPtr);
+                return new(
+                    credential.UserName,
+                    Marshal.PtrToStringUni(credential.CredentialBlob, credential.CredentialBlobSize / 2),
+                    DateTime.FromFileTimeUtc(credential.LastWritten).ToLocalTime()
+                );
             }
             finally
             {
@@ -170,27 +200,15 @@ namespace OlatAccessibilityApp
             }
         }
 
-        public uint Flags;
-        public uint Type;
-        public string TargetName;
-        public string? Comment;
-        public long LastWritten;
-        private int CredentialBlobSize;
-        private string CredentialBlob;
-        public uint Persist;
-        public int AttributeCount;
-        public IntPtr Attributes;
-        public string? TargetAlias;
-        public string UserName;
-
-        public string Password
+        private Credential(string userName, string password, DateTime? lastWritten)
         {
-            get => CredentialBlob;
-            set
-            {
-                CredentialBlob = value;
-                CredentialBlobSize = CredentialBlob.Length * 2;
-            }
+            UserName = userName;
+            Password = password;
+            LastWritten = lastWritten;
         }
+
+        public string UserName { get; }
+        public string Password { get; }
+        public DateTime? LastWritten { get; }
     }
 }

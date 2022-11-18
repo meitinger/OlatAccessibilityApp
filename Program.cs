@@ -69,17 +69,17 @@ namespace OlatAccessibilityApp
 
             void Login(bool alwaysQueryForCredential = false)
             {
-                if (!credential.HasValue || alwaysQueryForCredential)
+                if (credential is null || alwaysQueryForCredential)
                 {
                     credential = Credential.Query(splashForm.Handle, credential);
                 }
-                if (credential.HasValue)
+                if (credential is not null)
                 {
                     // do _not_ use using for content or ReadAsStreamAsync
                     var content = new FormUrlEncodedContent(new Dictionary<string, string>()
                     {
-                        { "o_fiooolat_login_name", credential.Value.UserName },
-                        { "o_fiooolat_login_pass", credential.Value.Password },
+                        { "o_fiooolat_login_name", credential.UserName },
+                        { "o_fiooolat_login_pass", credential.Password },
                     });
                     var request = mainForm.WebView.CoreWebView2.Environment.CreateWebResourceRequest
                     (
