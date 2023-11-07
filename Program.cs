@@ -114,7 +114,7 @@ namespace OlatAccessibilityApp
             {
                 if (!e.IsSuccess)
                 {
-                    if (e.WebErrorStatus != CoreWebView2WebErrorStatus.OperationCanceled)
+                    if (e.WebErrorStatus is not (CoreWebView2WebErrorStatus.OperationCanceled or CoreWebView2WebErrorStatus.ConnectionAborted))
                     {
                         ReportError(e.WebErrorStatus.ToString());
                         context.MainForm.Close();
